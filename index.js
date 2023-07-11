@@ -1,42 +1,52 @@
-const express = require('express');
-const app = express();
-
-const firebase = require('firebase');
-const firebaseConfig = require('./TestSMS/config');
-const database = firebase.database();
-firebase.initializeApp(firebaseConfig);
-
+const express = require('express')
+const cors = require('cors')
+const User = require('./config')
+const app = express()
+app.use(express.json())
+app.use(cors())
+const http = require('http')
+const server = http.createServer(app)
+const { Server } = require("socket.io")
+const io = new Server(server)
 const PORT = process.env.PORT || 3000;
 
 app.get('/', (req, res) => {
-  res.write(`<h1>heo ne: ${PORT}</h1>`);
-  res.end();
-});
+  res.write('<h1>Server is online</h1>')
+})
 
-app.listen(3000, () => {
-  console.log('listening on *:3000');
-});
-
-// Read data from the database
-database
-  .ref('messages')
-  .once('value')
-  .then((snapshot) => {
-    const messages = snapshot.val();
-    console.log(messages);
+io.on('connection', (socket) => {
+  console.log('a user connected')
+  socket.on('message', (ms) => {
+    io.emit('message', ms)
+    const inputString = ms;
+    const [user, message] = inputString.split(" : ");
+    const result = {
+      user: user.trim(),
+      message: message.trim(),
+      date: Date()
+    };
+    User.add(result)
   })
-  .catch((error) => {
-    console.error('Error reading data:', error);
-  });
 
-// Write data to the database
-const newMessage = 'Hello, Firebase!';
-database
-  .ref('messages')
-  .push(newMessage)
-  .then(() => {
-    console.log('Data written successfully');
-  })
-  .catch((error) => {
-    console.error('Error writing data:', error);
+  socket.on('UserData', async () => {
+    try {
+      const snapshot = await User.get(); // Assuming User.get() returns a Firestore collection reference
+      const list = snapshot.docs.map((doc) => doc.data());
+      const jsonString = JSON.stringify(list);
+      socket.emit('Userlist', jsonString);
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    }
   });
+})
+
+app.post("/create", async (req, res) => {
+  // const data = req.body
+  const snapshot = await User.get(); // Assuming User.get() returns a Firestore collection reference
+  const list = snapshot.docs.map((doc) => doc.data());
+  console.log(list)
+})
+
+server.listen(PORT, () => {
+  console.log('listening on 3000')
+})

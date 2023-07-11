@@ -9,7 +9,11 @@
   "author": "hoan",
   "license": "ISC",
   "dependencies": {
+    "cors": "^2.8.5",
     "express": "^4.18.2",
-    "socket.io": "^4.7.1"
+    "firebase": "^8.6.8",
+    "run-node": "^2.0.0",
+    "socket.io": "^4.7.1",
+    "yarn": "^1.22.19"
   }
 }
