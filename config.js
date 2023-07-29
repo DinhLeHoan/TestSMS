@@ -1,4 +1,3 @@
-const firebase = require("firebase");
 const firebaseConfig = {
   apiKey: "AIzaSyAydhNBsKkslRoGKvSj3-yI8GE2jo7FLJo",
   authDomain: "textmind-ce96f.firebaseapp.com",
@@ -9,13 +8,4 @@ const firebaseConfig = {
   appId: "1:518243305900:web:3297a21724473284215209",
   measurementId: "G-NM74MXCR1E"
 };
-firebase.initializeApp(firebaseConfig)
-const db = firebase.firestore()
-const User = db.collection("Users");
-const userRef = db.collection("Users").doc("User_1");
-const messageRef = userRef.collection("Message").doc("one").collection("data");
-
-module.exports = {
-  User: User,
-  messageRef: messageRef
-};
+module.exports = firebaseConfig;
