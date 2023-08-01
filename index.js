@@ -7,8 +7,8 @@ firebase.initializeApp(firebaseConfig)
 const db = firebase.firestore()
 
 const User = db.collection("Users");
-const userRe= null;
-const messageRef = null;
+let userRef= null;
+let messageRef = null;
 
 const firebaseAdmin = require('firebase-admin');
 const serviceAccount = require('./serviceAccountKey.json');
@@ -41,24 +41,24 @@ async function verifyPassword(plainPassword, hashedPassword) {
 }
 
 
-// const onlineUsers = [];
+const onlineUsers = [];
 
 // // Function to handle sign-in status
-// function handleSignInStatus(uID) {
-//   // Add the uID to the onlineUsers array if not already present
-//   if (!onlineUsers.includes(uID)) {
-//     onlineUsers.push(uID);
-//   }
-// }
+function handleSignInStatus(uID) {
+  // Add the uID to the onlineUsers array if not already present
+  if (!onlineUsers.includes(uID)) {
+    onlineUsers.push(uID);
+  }
+}
 
-// // Function to handle sign-out status
-// function handleSignOutStatus(uID) {
-//   // Remove the uID from the onlineUsers array if it exists
-//   const index = onlineUsers.indexOf(uID);
-//   if (index !== -1) {
-//     onlineUsers.splice(index, 1);
-//   }
-// }
+// Function to handle sign-out status
+function handleSignOutStatus(uID) {
+  // Remove the uID from the onlineUsers array if it exists
+  const index = onlineUsers.indexOf(uID);
+  if (index !== -1) {
+    onlineUsers.splice(index, 1);
+  }
+}
 
 //set user to use
 function setUser(uIDFrom,uIDTo) {
@@ -66,42 +66,75 @@ function setUser(uIDFrom,uIDTo) {
     messageRef = userRef.collection("Message").doc(uIDTo).collection("data");
 }
 
+function isToday(date) {
+  const today = new Date();
+  return date.getDate() === today.getDate() &&
+         date.getMonth() === today.getMonth() &&
+         date.getFullYear() === today.getFullYear();
+}
+
+// Function to check if a date is yesterday
+function isYesterday(date) {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  return date.getDate() === yesterday.getDate() &&
+         date.getMonth() === yesterday.getMonth() &&
+         date.getFullYear() === yesterday.getFullYear();
+}
+
+function formatMessageDate(result) {
+  const now = new Date();
+
+  // Get the message date as a Date object
+  const messageDate = new Date(result.date);
+
+  // Format the date based on the conditions you described
+  if (isToday(messageDate)) {
+    result.date = messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } else if (isYesterday(messageDate)) {
+    result.date = 'Yesterday, ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } else {
+    result.date = messageDate.toLocaleDateString('en-US') + ', ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  return result;
+}
+
 // SocketIO
 io.on('connection', (socket) => {
   console.log('a user connected');
 
   //send message to firebase
-  socket.on('messageSend',async (ms) => {
-    const inputString = ms;
-    const [user, message] = inputString.split(" : ");
-    const dataArray = [];
-
-    const result = {
-      name: user.trim(),
-      message: message.trim(),
-      date: Date()
-    };
-    dataArray.push(result);
-
-    // convert result to Json
-    const jsonString = JSON.stringify(dataArray);
-    
-    // push Json( message ) to java swing
-    io.emit('messageGet',await jsonString);
-
-    const messageRefSnapshot = await messageRef.get();
-    let nextIdNumber = 6; // Starting ID number
-    messageRefSnapshot.forEach((doc) => {
-      const idNumber = parseInt(doc.id.substr(1));
-      if (idNumber >= nextIdNumber) {
-        nextIdNumber = idNumber + 1;
-      }
-    });
-    
-    // Generate the custom ID
-    const customId = `m${nextIdNumber}`;
-    
-    messageRef.doc(customId).set(result)
+  socket.on('messageSend', async (messDataSend) => {
+    try {
+      const uIDTo = messDataSend.uidTo;
+      const uIDFrom = messDataSend.uidFrom;
+      const message = messDataSend.message;
+      const name = messDataSend.name;
+      const date = new Date();
+  
+      const result = {
+        name: name,
+        message: message,
+        date: date
+      };
+  
+      // Save the message to Firestore
+      let messageRef = db.collection("Users").doc(uIDFrom).collection("Message").doc(uIDTo).collection("Data");
+      await messageRef.add(result);
+      messageRef = db.collection("Users").doc(uIDTo).collection("Message").doc(uIDFrom).collection("Data");
+      await messageRef.add(result);
+  
+      // Format the date in the result object before emitting
+      const formattedResult = formatMessageDate(result);
+  
+      // Emit the message back to Java Swing
+      const resultJson = JSON.stringify(formattedResult);
+      console.log(`${uIDTo}`);
+      io.emit(`${uIDTo}`, await resultJson);
+    } catch (error) {
+      console.error('Error saving message data:', error);
+    }
   });
 
   //  get list user from firebase then push to java swing by emit
@@ -124,8 +157,6 @@ io.on('connection', (socket) => {
           const friendData = friendDoc.data();
           const formattedFriend = {
             name: friendData.name,
-            username: friendData.username,
-            password: friendData.password,
             uID: friendID,
           };
           userList.push(formattedFriend);
@@ -142,24 +173,41 @@ io.on('connection', (socket) => {
   // load message from firebase then push to javaswing by emit 
   socket.on('LoadMess', async (requestData) => {
     try {
-      // if (requestData && requestData.request === true) {
-        messageRef.get().then((querySnapshot) => {
-          const dataArray = []; // Array to store the formatted data
-          
-          querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            const formattedData = {
-              name: data.name,
-              message: data.message
-            };
-            dataArray.push(formattedData);
-          });
-          const jsonString = JSON.stringify(dataArray);
-          socket.emit('messToSwing', jsonString);
+      const uIDTo = requestData.uidTo;
+      const uIDFrom = requestData.uidFrom;
+      userRef =  db.collection("Users").doc(uIDFrom);
+      messageRef =  userRef.collection("Message").doc(uIDTo).collection("Data");
+      messageRef.get().then((querySnapshot) => {
+        let dataArray = []; // Array to store the formatted data
+  
+        const now = new Date(); // Current date and time
+        
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+  
+          // Get the message date as a Date object
+          const messageDate = new Date(data.date);
+  
+          let formattedDate;
+          if (isToday(messageDate)) {
+            formattedDate = messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          } else if (isYesterday(messageDate)) {
+            formattedDate = 'Yesterday, ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          } else {
+            formattedDate = messageDate.toLocaleDateString('en-US') + ', ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          }
+  
+          const formattedData = {
+            name: data.name,
+            message: data.message,
+            date: formattedDate
+          };
+          dataArray.push(formattedData);
         });
-       //} 
-
-      
+  
+        const jsonString = JSON.stringify(dataArray);
+        socket.emit('messToSwing', jsonString);
+      });
     } catch (error) {
       console.error('Error fetching user data:', error);
     }
@@ -212,16 +260,16 @@ io.on('connection', (socket) => {
   });
 
   // // Event listener for 'signInStatus'
-  // socket.on('signInStatus', async (uID) => {
-  //   handleSignInStatus(uID);
-  //   console.log(onlineUsers)
-  //   socket.emit('getSignInStatus', onlineUsers);
-  // });
+  socket.on('signInStatus', async (uID) => {
+    handleSignInStatus(uID);
+    console.log(onlineUsers)
+    socket.emit('getSignInStatus', onlineUsers);
+  });
 
-  // // Event listener for 'signOutStatus'
-  // socket.on('signOutStatus', async (uID) => {
-  //   handleSignOutStatus(uID);
-  // });
+  // Event listener for 'signOutStatus'
+  socket.on('signOutStatus', async (uID) => {
+    handleSignOutStatus(uID);
+  });
   
 });
 
