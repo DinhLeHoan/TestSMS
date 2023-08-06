@@ -60,39 +60,130 @@ function handleSignOutStatus(uID) {
   }
 }
 
-function isToday(date) {
-  const today = new Date();
-  return date.getDate() === today.getDate() &&
-         date.getMonth() === today.getMonth() &&
-         date.getFullYear() === today.getFullYear();
-}
-
-// Function to check if a date is yesterday
-function isYesterday(date) {
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  return date.getDate() === yesterday.getDate() &&
-         date.getMonth() === yesterday.getMonth() &&
-         date.getFullYear() === yesterday.getFullYear();
-}
-
-function formatMessageDate(result) {
-  const now = new Date();
-
-  // Get the message date as a Date object
-  const messageDate = new Date(result.date);
-
-  // Format the date based on the conditions you described
-  if (isToday(messageDate)) {
-    result.date = messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  } else if (isYesterday(messageDate)) {
-    result.date = 'Yesterday, ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  } else {
-    result.date = messageDate.toLocaleDateString('en-US') + ', ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+function formatMessageDate(timestamp) {
+  if (!timestamp || !timestamp.seconds) {
+    return "Unknown Date";
   }
 
-  return result;
+  const seconds = timestamp.seconds * 1000; // Convert seconds to milliseconds
+  const messageDate = new Date(seconds);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  if (messageDate >= today) {
+    return messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } else if (messageDate >= yesterday) {
+    return 'Yesterday, ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } else {
+    return messageDate.toLocaleDateString('en-US') + ', ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
 }
+
+function formatTimestamp(timestampString) {
+  const messageDate = new Date(timestampString);
+
+  if (isNaN(messageDate.getTime())) {
+    // Invalid date format, return "Unknown Date"
+    return "Unknown Date";
+  }
+
+  // Get the current date
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Get the date for yesterday
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  // Compare the message date with today and yesterday
+  if (messageDate >= today) {
+    // If the message date is today, format it as "8:03:52 AM"
+    return messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } else if (messageDate >= yesterday) {
+    // If the message date is yesterday, format it as "Yesterday, 8:03:52 AM"
+    return 'Yesterday, ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } else {
+    // If the message date is before yesterday, format it as "03/06/2023, 8:03:52 AM"
+    return messageDate.toLocaleDateString('en-US') + ', ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+}
+
+// Custom comparison function for sorting
+function customSortByDate(a, b) {
+  const dateA = parseDate(a.date);
+  console.log(dateA)
+  const dateB = parseDate(b.date);
+  console.log(dateB)
+
+  if (dateA > dateB) {
+    return 1;
+  } else if (dateA < dateB) {
+    return -1;
+  }
+  return 0;
+}
+
+function parseDate(dateString) {
+  const now = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const dateRegex = /(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2}) (AM|PM)|Yesterday, (\d{1,2}):(\d{2}) (AM|PM)|(\d{1,2}):(\d{2}) (AM|PM)/;
+  const match = dateString.match(dateRegex);
+  if (match) {
+    if (match[1] && match[2] && match[3] && match[4] && match[5]) {
+      // Format: dd/MM/yyyy, hh:mm AM/PM
+      const day = parseInt(match[1]);
+      const month = parseInt(match[2]) - 1;
+      const year = parseInt(match[3]);
+      let hours = parseInt(match[4]);
+      const minutes = parseInt(match[5]);
+      const ampm = match[6].toUpperCase();
+      if (ampm === "PM" && hours < 12) {
+        hours += 12;
+      } else if (ampm === "AM" && hours === 12) {
+        hours = 0;
+      }
+      return new Date(year, month, day, hours, minutes);
+    } else if (match[7] && match[8] && match[9]) {
+      // Format: Yesterday, hh:mm AM/PM
+      const hours = parseInt(match[7]);
+      const minutes = parseInt(match[8]);
+      const ampm = match[9].toUpperCase();
+      let date = new Date(yesterday);
+      if (ampm === "PM" && hours < 12) {
+        date.setHours(hours + 12, minutes, 0, 0);
+      } else if (ampm === "AM" && hours === 12) {
+        date.setHours(0, minutes, 0, 0);
+      } else {
+        date.setHours(hours, minutes, 0, 0);
+      }
+      return date;
+    } else if (match[10] && match[11]) {
+      // Format: hh:mm AM/PM
+      const hours = parseInt(match[10]);
+      const minutes = parseInt(match[11]);
+      const ampm = match[12].toUpperCase();
+      let date = new Date(now);
+      if (ampm === "PM" && hours < 12) {
+        date.setHours(hours + 12, minutes, 0, 0);
+      } else if (ampm === "AM" && hours === 12) {
+        date.setHours(0, minutes, 0, 0);
+      } else {
+        date.setHours(hours, minutes, 0, 0);
+      }
+      return date;
+    }
+  }
+  return now; // Return the current date if the format doesn't match
+}
+
+
+
+// Test the function
 
 // SocketIO
 io.on('connection', (socket) => {
@@ -106,11 +197,10 @@ io.on('connection', (socket) => {
       const message = messDataSend.message;
       const name = messDataSend.name;
       const date = new Date();
-  
       const result = {
         name: name,
         message: message,
-        date: date
+        date: date  
       };
   
       // Save the message to Firestore
@@ -119,12 +209,15 @@ io.on('connection', (socket) => {
       messageRef = db.collection("Users").doc(uIDTo).collection("Message").doc(uIDFrom).collection("Data");
       await messageRef.add(result);
   
+      const resultToSwing = {
+        name: result.name,
+        message: result.message,
+        date: formatTimestamp(result.date)
+      };
       // Format the date in the result object before emitting
-      const formattedResult = formatMessageDate(result);
-  
       // Emit the message back to Java Swing
-      const resultJson = JSON.stringify(formattedResult);
-      console.log(`${uIDTo}`);
+      const resultJson = JSON.stringify(resultToSwing);
+
       io.emit(`${uIDTo}`, await resultJson);
     } catch (error) {
       console.error('Error saving message data:', error);
@@ -172,36 +265,32 @@ io.on('connection', (socket) => {
       userRef =  db.collection("Users").doc(uIDFrom);
       messageRef =  userRef.collection("Message").doc(uIDTo).collection("Data");
       messageRef.get().then((querySnapshot) => {
-        let dataArray = []; // Array to store the formatted data
-  
+        const dataArray = []; // Array to store the formatted data
         const now = new Date(); // Current date and time
         
         querySnapshot.forEach((doc) => {
           const data = doc.data();
   
           // Get the message date as a Date object
-          const messageDate = new Date(data.date);
-  
-          let formattedDate;
-          if (isToday(messageDate)) {
-            formattedDate = messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          } else if (isYesterday(messageDate)) {
-            formattedDate = 'Yesterday, ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          } else {
-            formattedDate = messageDate.toLocaleDateString('en-US') + ', ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          }
-  
           const formattedData = {
             name: data.name  || '',
             message: data.message,
-            date: formattedDate
+            date: formatMessageDate(data.date)
           };
+
           if(formattedData.name !== ''){
             dataArray.push(formattedData);
           }
+
+          // dataArray.forEach((item) => {
+          //   // console.log(item)
+
+          //   // item.date = formatMessageDate(item.date);
+          // });
+
         });
-        
-        const jsonString = JSON.stringify(dataArray);
+        // dataArray.sort(customSortByDate)
+        const jsonString = JSON.stringify(dataArray.sort(customSortByDate));
         socket.emit('messToSwing', jsonString);
       });
     } catch (error) {
