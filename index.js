@@ -115,9 +115,7 @@ function formatTimestamp(timestampString) {
 // Custom comparison function for sorting
 function customSortByDate(a, b) {
   const dateA = parseDate(a.date);
-  console.log(dateA)
   const dateB = parseDate(b.date);
-  console.log(dateB)
 
   if (dateA > dateB) {
     return 1;
@@ -336,6 +334,10 @@ io.on('connection', (socket) => {
       const jsonUser = JSON.stringify(currentUser);
       // Emit the 'signInSuccess' event to the client with the user's UID
       socket.emit('signInSuccess', jsonUser);
+      handleSignInStatus(currentUser.uID);
+      console.log(onlineUsers)
+      socket.emit('getSignInStatus', onlineUsers);
+      
     } catch (error) {
       console.error('Sign-in error:', error.message);
 
@@ -350,6 +352,10 @@ io.on('connection', (socket) => {
     console.log(onlineUsers)
     socket.emit('getSignInStatus', onlineUsers);
   });
+
+  setInterval(() => {
+    socket.emit('getSignInStatus', onlineUsers);
+  }, 100); 
 
   socket.on('signUpCheck', async (data) => {
     const { username, password, email, name, random } = data;
