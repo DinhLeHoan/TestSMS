@@ -349,7 +349,6 @@ io.on('connection', (socket) => {
   // // Event listener for 'signInStatus'
   socket.on('signInStatus', async (uID) => {
     handleSignInStatus(uID);
-    console.log(onlineUsers)
     socket.emit('getSignInStatus', onlineUsers);
   });
 
@@ -416,71 +415,58 @@ io.on('connection', (socket) => {
   });  
 
   socket.on('findAndAdd', async (data) => {
-    const { name, uID } = data;
+    const { nameOrMail, uID } = data;
+    const foundUsers = []; // Array to store found users
   
     try {
-      // Check if the username already exists
-      const usernameSnapshot = await firebaseAdmin
+      // Look up users by name
+      const nameSnapshot = await firebaseAdmin
         .firestore()
         .collection('Users')
-        .where('name', '==', name)
-        .limit(1)
+        .where('name', '==', nameOrMail)
         .get();
-      let uIDFriend = usernameSnapshot.docs[0].id
-      if (!usernameSnapshot.empty) {
-        // Username exists, emit false
-                // Get the user's document with the provided uID
-                let userRef = db.collection('Users').doc(uID);
   
-                // Create the "Message" subcollection for the user with the given name
-                let messageRef = userRef.collection('Message').doc(uIDFriend+'');
-                let dataRef = messageRef.collection('Data');
-                // Add a sample document into the "Data" subcollection
-                await dataRef.add({
-                });
-                await messageRef.set({
-                  // Add your data for the document here
-                  // For example:
-                  fieldA: 'Value A',
-                  // Add more fields as needed
-                });
-
-                userRef = db.collection('Users').doc(uIDFriend);
+      nameSnapshot.forEach((doc) => {
+        const user = doc.data();
+        const found = {
+          name: user.name,
+          uID: doc.id,
+        };
+        foundUsers.push(found);
+      });
   
-                // Create the "Message" subcollection for the user with the given name
-                messageRef = userRef.collection('Message').doc(uID+'');
-                dataRef = messageRef.collection('Data');
-                // Add a sample document into the "Data" subcollection
-                await dataRef.add({
-                });
-                await messageRef.set({
-                  // Add your data for the document here
-                  // For example:
-                  fieldA: 'Value A',
-                  // Add more fields as needed
-                });
-              
-        socket.emit(`FindResult${uID}`, true);
-        socket.emit(`FindResult${uIDFriend}`, true);
-                // socket.emit(`newFriend${uID}`,false)
-      } else {
-        // Username does not exist, emit true
-        socket.emit(`FindResult${uID}`, false);
+      // If no users found by name, look up users by email
+      if (foundUsers.length === 0) {
+        const emailSnapshot = await firebaseAdmin
+          .firestore()
+          .collection('Users')
+          .where('email', '==', nameOrMail)
+          .get();
   
-
+        emailSnapshot.forEach((doc) => {
+          const user = doc.data();
+          const found = {
+            name: user.name,
+            uID: doc.id,
+          };
+          foundUsers.push(found);
+        });
       }
+  
+      // Emit the array of found users to the client
+      socket.emit(`FindResult${uID}`, foundUsers);
+      console.log(foundUsers)
     } catch (error) {
-      console.error('Error while checking for existing user:', error.message);
-      // Emit false in case of an error
-      socket.emit(`FindResult${uID}`, false);
+      console.error('Error:', error.message);
+      // Handle the error if needed
     }
-  });
-  
-  
+  });  
 
   // Event listener for 'signOutStatus'
   socket.on('signOutStatus', async (uID) => {
     handleSignOutStatus(uID);
+
+    console.log(onlineUsers)
   });
   
 });
