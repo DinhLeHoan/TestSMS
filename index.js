@@ -75,11 +75,11 @@ function formatMessageDate(timestamp) {
   yesterday.setDate(yesterday.getDate() - 1);
 
   if (messageDate >= today) {
-    return messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return messageDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
   } else if (messageDate >= yesterday) {
-    return 'Yesterday, ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return 'Yesterday, ' + messageDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
   } else {
-    return messageDate.toLocaleDateString('en-US') + ', ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return messageDate.toLocaleDateString('vi-VN') + ', ' + messageDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
   }
 }
 
