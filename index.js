@@ -402,9 +402,11 @@ io.on('connection', (socket) => {
       let uID = userRef.id;
       
       let messageRef = db.collection("Users").doc(uID).collection("Message");
+      let friendRQRef = db.collection("Users").doc(uID).collection("FriendRequest");
       await messageRef.add({
       });
-      
+      await friendRQRef.add({
+      });
       // Both username and email are not found, emit true
       socket.emit(`signUpValidate${random}`, true);
 
@@ -469,6 +471,97 @@ io.on('connection', (socket) => {
     console.log(onlineUsers)
   });
   
+  socket.on('sendRequestFriend', async (data) => {
+    const { uidTo, uidFrom } = data;
+    const friendRequest = db.collection('Users').doc(uidTo).collection('FriendRequest');
+    
+    friendRequest.doc(uidFrom).set({});
+    console.log(uidFrom)
+          
+  });
+  
+  socket.on('getAllRequestFriend', async (uID) => {
+    try {
+      // Create a reference to the 'FriendRequest' collection for the given uID
+      const friendRequestRef = db.collection('Users').doc(uID).collection('FriendRequest');
+      
+      // Get all documents from the 'FriendRequest' collection
+      const friendRequestSnapshot = await friendRequestRef.get();
+      
+      // Create an array to store the requests
+      const friendRequests = [];
+      
+      // Loop through the friend request documents
+      friendRequestSnapshot.forEach((doc) => {
+        // Get the data of the friend request document
+        const request = doc.id;
+        
+        // Add the request data to the array
+        friendRequests.push(request);
+      });
+      
+      // Create an array to store the found users
+      const foundUsers = [];
+      
+      // Loop through the friend requests and find user information
+      for (const request of friendRequests) {
+        // Use the sender's uID to look up their information
+        const senderSnapshot = await db.collection('Users').doc(request).get();
+        if (senderSnapshot.exists) {
+          const senderData = senderSnapshot.data();
+          
+          // Add sender's information to the array
+          foundUsers.push({
+            name: senderData.name,
+            uID: request,
+          });
+        }
+      }
+      
+      // Emit the foundUsers array back to the client
+      socket.emit(`foundUsersSendRQ${uID}`, foundUsers);
+    } catch (error) {
+      console.error('Error fetching friend requests:', error);
+      // Handle the error and emit an appropriate response
+    }
+  });
+  
+  socket.on('acceptOrDenyFriend', async (data) => {
+    const { uidFrom, uidTo, result } = data;
+    try {
+      const friendRequestRef = db.collection('Users').doc(uidTo).collection('FriendRequest').doc(uidFrom);
+  
+      if (result === true) {
+        // Remove the FriendRequest document with uidFrom
+        await friendRequestRef.delete();
+  
+        // Add a new document to the Message collection
+
+        await db.collection('Users').doc(uidFrom).collection('Message').doc(uidTo).set({});
+        await db.collection('Users').doc(uidTo).collection('Message').doc(uidFrom).set({});
+        
+        console.log('accept')
+        
+      } else if (result === false) {
+        // Remove the FriendRequest document with uidFrom
+        await friendRequestRef.delete();
+  
+        // Emit success response to the client
+      } 
+      else{
+        console.log('nothing happen')
+      }
+
+      socket.emit(`newFriend${uidFrom}`,true)
+      socket.emit(`newFriend${uidTo}`,true)
+
+    } catch (error) {
+      console.error('Error handling friend request:', error);
+      // Handle error and emit error response to the client if needed
+    }
+  });
+  
+
 });
 
 // example to create by object Express by pist create
