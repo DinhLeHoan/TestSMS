@@ -75,11 +75,11 @@ function formatMessageDate(timestamp) {
   yesterday.setDate(yesterday.getDate() - 1);
 
   if (messageDate >= today) {
-    return messageDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    return messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   } else if (messageDate >= yesterday) {
-    return 'Yesterday, ' + messageDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    return 'Yesterday, ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   } else {
-    return messageDate.toLocaleDateString('vi-VN') + ', ' + messageDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    return messageDate.toLocaleDateString('en-US') + ', ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 }
 
@@ -102,13 +102,13 @@ function formatTimestamp(timestampString) {
   // Compare the message date with today and yesterday
   if (messageDate >= today) {
     // If the message date is today, format it as "8:03:52 AM"
-    return messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return messageDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
   } else if (messageDate >= yesterday) {
     // If the message date is yesterday, format it as "Yesterday, 8:03:52 AM"
     return 'Yesterday, ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   } else {
     // If the message date is before yesterday, format it as "03/06/2023, 8:03:52 AM"
-    return messageDate.toLocaleDateString('en-US') + ', ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return messageDate.toLocaleDateString('vi-VN') + ', ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 }
 
@@ -280,11 +280,6 @@ io.on('connection', (socket) => {
             dataArray.push(formattedData);
           }
 
-          // dataArray.forEach((item) => {
-          //   // console.log(item)
-
-          //   // item.date = formatMessageDate(item.date);
-          // });
 
         });
         // dataArray.sort(customSortByDate)
