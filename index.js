@@ -30,6 +30,8 @@ const bcrypt = require('bcrypt');
 
 let currentUser = null; 
 
+process.env.TZ = 'Asia/Ho_Chi_Minh';
+
 async function verifyPassword(plainPassword, hashedPassword) {
   try {
     // Compare the plain password with the hashed password
@@ -102,13 +104,13 @@ function formatTimestamp(timestampString) {
   // Compare the message date with today and yesterday
   if (messageDate >= today) {
     // If the message date is today, format it as "8:03:52 AM"
-    return messageDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    return messageDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   } else if (messageDate >= yesterday) {
     // If the message date is yesterday, format it as "Yesterday, 8:03:52 AM"
     return 'Yesterday, ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   } else {
     // If the message date is before yesterday, format it as "03/06/2023, 8:03:52 AM"
-    return messageDate.toLocaleDateString('vi-VN') + ', ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return messageDate.toLocaleDateString('en-US') + ', ' + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 }
 
@@ -263,9 +265,7 @@ io.on('connection', (socket) => {
       userRef =  db.collection("Users").doc(uIDFrom);
       messageRef =  userRef.collection("Message").doc(uIDTo).collection("Data");
       messageRef.get().then((querySnapshot) => {
-        const dataArray = []; // Array to store the formatted data
-        const now = new Date(); // Current date and time
-        
+        const dataArray = []; // Array to store the formatted data        
         querySnapshot.forEach((doc) => {
           const data = doc.data();
   
