@@ -32,6 +32,8 @@ let currentUser = null;
 
 process.env.TZ = 'Asia/Ho_Chi_Minh';
 
+const nodemailer = require('nodemailer'); // Required for sending emails
+
 async function verifyPassword(plainPassword, hashedPassword) {
   try {
     // Compare the plain password with the hashed password
@@ -41,6 +43,14 @@ async function verifyPassword(plainPassword, hashedPassword) {
     return false;
   }
 }
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: 'textinyourmind@gmail.com', // Your Gmail email
+    pass: 'mdmsihcfdlpubipp' // App password or Gmail password (if using 2-step verification)
+  }
+});
 
 
 const onlineUsers = [];
@@ -250,8 +260,8 @@ io.on('connection', (socket) => {
         }
       }
   
-      const jsonUserList = JSON.stringify(userList);
-      socket.emit('pushListFriend', jsonUserList);
+      const jsonUserList = await JSON.stringify(userList);
+      socket.emit('pushListFriend',await jsonUserList);
     } catch (error) {
       console.error('Error fetching list of friends:', error);
     }
@@ -324,7 +334,8 @@ io.on('connection', (socket) => {
         name: userData.name,
         username: userData.username,
         password: userData.password,
-        uID: userDoc.id
+        uID: userDoc.id,
+        email: userData.email
       };
       const jsonUser = JSON.stringify(currentUser);
       // Emit the 'signInSuccess' event to the client with the user's UID
@@ -467,12 +478,19 @@ io.on('connection', (socket) => {
   });
   
   socket.on('sendRequestFriend', async (data) => {
-    const { uidTo, uidFrom } = data;
+    const { uidTo, nameFrom, uidFrom } = data;
     const friendRequest = db.collection('Users').doc(uidTo).collection('FriendRequest');
     
     friendRequest.doc(uidFrom).set({});
-    console.log(uidFrom)
-          
+
+    const someOne = {
+      name: nameFrom,
+      uID: uidFrom
+    };
+
+    const someOneJson = await JSON.stringify(someOne);
+    io.emit(`someOneSendRQ${uidTo}`,await someOneJson);
+
   });
   
   socket.on('getAllRequestFriend', async (uID) => {
@@ -535,20 +553,19 @@ io.on('connection', (socket) => {
         await db.collection('Users').doc(uidFrom).collection('Message').doc(uidTo).set({});
         await db.collection('Users').doc(uidTo).collection('Message').doc(uidFrom).set({});
         
-        console.log('accept')
-        
+        io.emit(`newFriend${uidFrom}`, await true)
+        socket.emit(`newFriend${uidTo}`,true)
       } else if (result === false) {
         // Remove the FriendRequest document with uidFrom
         await friendRequestRef.delete();
-  
+        socket.emit(`notNewFriend${uidTo}`,true)
         // Emit success response to the client
       } 
       else{
         console.log('nothing happen')
       }
 
-      socket.emit(`newFriend${uidFrom}`,true)
-      socket.emit(`newFriend${uidTo}`,true)
+
 
     } catch (error) {
       console.error('Error handling friend request:', error);
@@ -556,16 +573,117 @@ io.on('connection', (socket) => {
     }
   });
   
+  socket.on('getValicateEmail', async (data) => {
+    try {
+      const { email, random,type } = data;
+      // Generate a random verification code
+      const verificationCode = Math.floor(100000 + Math.random() * 900000);
+      let typeOfMail = null;
+      if(type=="resetpass"){
+        typeOfMail = "Password Reset Request";
+      }
+      else if(type == "verification"){
+        typeOfMail = "Email Verification Code";
+      }
+      else{
+        typeOfMail = "Password and username Request";
+      }
+      // Configure email options
+      const mailOptions = {
+        from: 'textinyourmind@gmail.com',
+        to: email,
+        subject: `${typeOfMail}`,
+        html: `
+          <h2>${typeOfMail}</h2>
+          <p>Thank you for ${typeOfMail} with TextInYourMind. Your verification code is:</p>
+          <p style="font-size: 24px; font-weight: bold;">${verificationCode}</p>
+          <p>Please use this code to complete your ${typeOfMail} process.</p>
+          <p>If you did not request this verification code, please disregard this email.</p>
+          <p>Thank you,<br/>The TextInYourMind Team</p>
+        `
+      };
+      
 
+      // Send the email
+      transporter.sendMail(mailOptions, (error, info) => {
+        if (error) {
+          console.error('Error sending email:', error);
+          // Handle error and emit error response to the client if needed
+        } else {
+          const verify = {
+            code: verificationCode,
+            mailOfThis: email
+          };
+      
+          const verifyJson = JSON.stringify(verify);
+          socket.emit(`verificationCodeSent${random}`, verifyJson); // Emit event to Java Swing app
+        }
+      });
+    } catch (error) {
+      console.error('Error handling email verification:', error);
+      // Handle error and emit error response to the client if needed
+    }
+  });
+
+  socket.on('changePassword', async (data) => {
+    try {
+      const { uID, password } = data;
+
+      // Assuming 'Users' is your Firestore collection reference
+      const userRef = db.collection('Users').doc(uID);
+
+      // Update the user's password field
+      await userRef.update({ password: password });
+
+
+      socket.emit(`passwordChangeSuccess${uID}`, true); // Emit success event to Java Swing app
+    } catch (error) {
+      socket.emit(`passwordChangeSuccess${uID}`, false); // Emit success event to Java Swing app
+      // Handle error and emit error response to the client if needed
+    }
+  });
+
+  socket.on('sendUserAndPass', async (data) => {
+    try {
+      // Search for the validateMail in the Users collection
+      const { email, random } = data;
+      const userSnapshot = await db.collection('Users').where('email', '==', email).get();
+
+      if (!userSnapshot.empty) {
+        const user = userSnapshot.docs[0].data();
+        const { username, password } = user;
+
+        const mailOptions = {
+          from: 'textinyourmind@gmail.com',
+          to: email,
+          subject: 'Account Information',
+          html: `
+            <h2>Your Account Information</h2>
+            <p>Username: ${username}</p>
+            <p>Password: ${password}</p>
+            <p>Please keep your account information secure.</p>
+            <p>Thank you,<br/>The TextInYourMind Team</p>
+          `
+        };
+
+        transporter.sendMail(mailOptions, (error, info) => {
+          if (error) {
+            // Handle error and emit error response to the client if needed
+          } else {
+            // Emit event to Java Swing app indicating success
+            socket.emit(`successGetUserPass${random}`, true);
+          }
+        });
+      } else {
+        // Emit event to Java Swing app indicating failure
+        socket.emit(`successGetUserPass${random}`, false);
+      }
+    } catch (error) {
+      console.error('Error handling sendUserAndPass:', error);
+      // Handle error and emit error response to the client if needed
+    }
+  });
 });
-
-// example to create by object Express by pist create
-app.post("/create", async (req, res) => {
-  // const data = req.body
-  const snapshot = await User.get(); // Assuming User.get() returns a Firestore collection reference
-  const list = snapshot.docs.map((doc) => doc.data());
-  console.log(list)
-})
 
 // open port by server
 server.listen(PORT, () => {
