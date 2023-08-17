@@ -126,8 +126,8 @@ function formatTimestamp(timestampString) {
 
 // Custom comparison function for sorting
 function customSortByDate(a, b) {
-  const dateA = parseDate(a.date);
-  const dateB = parseDate(b.date);
+  const dateA = parseDate(a.date).getTime();
+  const dateB = parseDate(b.date).getTime();
 
   if (dateA > dateB) {
     return 1;
@@ -329,6 +329,11 @@ io.on('connection', (socket) => {
         throw new Error('Invalid password');
       }
       
+      if(onlineUsers.includes(userDoc.id)){
+        const errorString = "This account is already signed in";
+        socket.emit('signInError', errorString);
+        return;
+      }
 
       currentUser = {
         name: userData.name,
@@ -683,6 +688,25 @@ io.on('connection', (socket) => {
       // Handle error and emit error response to the client if needed
     }
   });
+
+  socket.on('removeFriend', async (removeFriendData) => {
+    try {
+      const { uidFrom, uidTo } = removeFriendData;
+
+      // Clear related messages
+      await db.collection('Users').doc(uidFrom).collection('Message').doc(uidTo).delete();
+      await db.collection('Users').doc(uidTo).collection('Message').doc(uidFrom).delete();
+  
+      // Emit success response to the client
+      await io.emit(`newFriend${uidFrom}`, false);
+      await io.emit(`newFriend${uidTo}`, false);
+    } catch (error) {
+      console.error('Error removing friend:', error);
+      // Handle error and emit error response to the client if needed
+    }
+  });
+  
+
 });
 
 // open port by server
