@@ -26,23 +26,16 @@ const { Server } = require("socket.io")
 const io = new Server(server)
 const PORT = process.env.PORT || 3000;
 
-const bcrypt = require('bcrypt');
+const crypto = require('crypto');
+
+const algorithm = 'aes-256-cbc'; 
+const secretKey = crypto.createHash('sha256').update('textMinding').digest();;
 
 let currentUser = null; 
 
 process.env.TZ = 'Asia/Ho_Chi_Minh';
 
 const nodemailer = require('nodemailer'); // Required for sending emails
-
-async function verifyPassword(plainPassword, hashedPassword) {
-  try {
-    // Compare the plain password with the hashed password
-    return await bcrypt.compare(plainPassword, hashedPassword);
-  } catch (error) {
-    console.error('Error while verifying password:', error);
-    return false;
-  }
-}
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -54,6 +47,8 @@ const transporter = nodemailer.createTransport({
 
 
 const onlineUsers = [];
+const bannedUsers = [];
+
 
 // // Function to handle sign-in status
 function handleSignInStatus(uID) {
@@ -191,7 +186,36 @@ function parseDate(dateString) {
   return now; // Return the current date if the format doesn't match
 }
 
+function unbanUser(uID) {
+  // Remove the uID from the onlineUsers array if it exists
+  const index = bannedUsers.indexOf(uID);
+  if (index !== -1) {
+    bannedUsers.splice(index, 1);
+  }
+}
 
+function banUser(uID) {
+  if (!bannedUsers.includes(uID)) {
+    bannedUsers.push(uID);
+  }
+}
+
+function encrypt(text) {
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv(algorithm, Buffer.from(secretKey), iv);
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return `${iv.toString('hex')}:${encrypted}`;
+}
+
+// Decrypt a string
+function decrypt(encryptedText) {
+  const [ivHex, encryptedHex] = encryptedText.split(':');
+  const decipher = crypto.createDecipheriv(algorithm, Buffer.from(secretKey), Buffer.from(ivHex, 'hex'));
+  let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
+}
 
 // Test the function
 
@@ -325,12 +349,18 @@ io.on('connection', (socket) => {
       const userData = userDoc.data();
 
       // Perform password validation here (assuming password is stored securely)
-      if (userData.password !== password) {
+      if (decrypt(userData.password) !== password) {
         throw new Error('Invalid password');
       }
       
       if(onlineUsers.includes(userDoc.id)){
         const errorString = "This account is already signed in";
+        socket.emit('signInError', errorString);
+        return;
+      }
+
+      if(bannedUsers.includes(userDoc.id)){
+        const errorString = "This account is already banned";
         socket.emit('signInError', errorString);
         return;
       }
@@ -402,7 +432,7 @@ io.on('connection', (socket) => {
         email: email,
         image: "",
         name: name,
-        password: password,
+        password: encrypt(password),
         role: "user",
         username: username
       };
@@ -639,7 +669,7 @@ io.on('connection', (socket) => {
       const userRef = db.collection('Users').doc(uID);
 
       // Update the user's password field
-      await userRef.update({ password: password });
+      await userRef.update({ password: encrypt(password) });
 
 
       socket.emit(`passwordChangeSuccess${uID}`, true); // Emit success event to Java Swing app
@@ -666,7 +696,7 @@ io.on('connection', (socket) => {
           html: `
             <h2>Your Account Information</h2>
             <p>Username: ${username}</p>
-            <p>Password: ${password}</p>
+            <p>Password: ${decrypt(password)}</p>
             <p>Please keep your account information secure.</p>
             <p>Thank you,<br/>The TextInYourMind Team</p>
           `
@@ -719,7 +749,7 @@ io.on('connection', (socket) => {
         uidTo: uidTo,
         detail: detail,
       });
-  
+      io.emit('newReport',true);
       // Emit success response to the client
     } catch (error) {
 
@@ -753,13 +783,34 @@ io.on('connection', (socket) => {
             listReport.push(userReported);
           }
         }
-        console.log(data)
         io.emit(`pushListReported${data}`, JSON.stringify(listReport));
       } catch (error) {
         console.error('Error fetching reported users:', error);
         // Handle error and emit error response to the client if needed
       }
     });
+
+  socket.on('banUser', async (idTo) => {
+    try {
+      banUser(idTo);
+      const reportsCollectionRef = db.collection('Reports'); // Your reports collection reference
+      const querySnapshot = await reportsCollectionRef.where('uidTo', '==', idTo).get();
+  
+      // Delete documents where uidTo matches idTo
+      const batch = db.batch();
+      querySnapshot.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+  
+      await batch.commit();
+      io.emit('newReport',true);
+
+      io.emit(`banUser${idTo}`,true);
+      // Emit success response to the client
+    } catch (error) {
+
+    }
+  });
 
 });
 
