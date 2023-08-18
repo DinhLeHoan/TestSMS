@@ -261,7 +261,7 @@ io.on('connection', (socket) => {
       }
   
       const jsonUserList = await JSON.stringify(userList);
-      socket.emit('pushListFriend',await jsonUserList);
+      socket.emit(`pushListFriend${userID}`,await jsonUserList);
     } catch (error) {
       console.error('Error fetching list of friends:', error);
     }
@@ -340,7 +340,8 @@ io.on('connection', (socket) => {
         username: userData.username,
         password: userData.password,
         uID: userDoc.id,
-        email: userData.email
+        email: userData.email,
+        role: userData.role
       };
       const jsonUser = JSON.stringify(currentUser);
       // Emit the 'signInSuccess' event to the client with the user's UID
@@ -706,6 +707,59 @@ io.on('connection', (socket) => {
     }
   });
   
+  socket.on('reportUser', async (reportData) => {
+    try {
+      const { uidFrom, uidTo, detail } = reportData;
+  
+      const reportsRef = db.collection('Reports');
+  
+      // Create a new report document
+      await reportsRef.add({
+        uidFrom: uidFrom,
+        uidTo: uidTo,
+        detail: detail,
+      });
+  
+      // Emit success response to the client
+    } catch (error) {
+
+    }
+  });
+  
+  socket.on('getListReported', async (data) => {
+
+      try {
+        const reportsRef = db.collection('Reports');
+        const reportsSnapshot = await reportsRef.get();
+  
+        const listReport = [];
+  
+        for (const doc of reportsSnapshot.docs) {
+          const reportData = doc.data();
+          const uIDto = reportData.uidTo;
+  
+          // Fetch user details from the Users collection
+          const userRef = db.collection('Users').doc(uIDto);
+          const userDoc = await userRef.get();
+  
+          if (userDoc.exists) {
+            const userData = userDoc.data();
+            const userReported = {
+              name: userData.name,
+              uIDfrom: reportData.uidFrom,
+              uIDto: reportData.uidTo,
+              detail: reportData.detail
+            };
+            listReport.push(userReported);
+          }
+        }
+        console.log(data)
+        io.emit(`pushListReported${data}`, JSON.stringify(listReport));
+      } catch (error) {
+        console.error('Error fetching reported users:', error);
+        // Handle error and emit error response to the client if needed
+      }
+    });
 
 });
 
