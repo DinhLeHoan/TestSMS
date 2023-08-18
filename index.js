@@ -368,7 +368,7 @@ io.on('connection', (socket) => {
       currentUser = {
         name: userData.name,
         username: userData.username,
-        password: userData.password,
+        password: decrypt(userData.password),
         uID: userDoc.id,
         email: userData.email,
         role: userData.role
@@ -461,8 +461,8 @@ io.on('connection', (socket) => {
   socket.on('findAndAdd', async (data) => {
     const { nameOrMail, uID } = data;
     const foundUsers = []; // Array to store found users
-  
     try {
+
       // Look up users by name
       const nameSnapshot = await firebaseAdmin
         .firestore()
@@ -811,6 +811,45 @@ io.on('connection', (socket) => {
 
     }
   });
+
+  socket.on('findAndUnban', async (data) => {
+    const { mail, uID } = data;
+    const foundUsers = []; // Array to store found users
+    try {
+  
+      // If no users found by name, look up users by email
+      if (foundUsers.length === 0) {
+        const emailSnapshot = await firebaseAdmin
+          .firestore()
+          .collection('Users')
+          .where('email', '==', mail)
+          .get();
+  
+        emailSnapshot.forEach((doc) => {
+          const user = doc.data();
+          const found = {
+            name: user.name,
+            uID: doc.id,
+          };
+          unbanUser(found.uID)
+          foundUsers.push(found);
+        });
+      }
+      if(foundUsers.length==0){
+        const logg = "error";
+        socket.emit(`banResult${uID}`, logg);
+      }
+      else{
+        const logg = "Success";
+        socket.emit(`banResult${uID}`, logg);
+        
+      }
+      // Emit the array of found users to the client
+    } catch (error) {
+      console.error(`Error:${uID}`, error.message);
+      // Handle the error if needed
+    }
+  }); 
 
 });
 
